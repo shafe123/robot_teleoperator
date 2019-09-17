@@ -54,11 +54,12 @@ void lidarCallback(const sensor_msgs::LaserScan& msg)
 
     ROS_DEBUG("Scan had %i values from %f to %f", value_range, msg.range_min, msg.range_max);
     ROS_DEBUG("Got message from lidar: min: %f at %f degrees, max: %f", min, min_degree, max);
-    bool _teleoperator_lidar_msg_received = true;
+    _teleoperator_lidar_msg_received = true;
 }
 
 int main(int argc, char **argv)
 {
+    bool critical_fail = false;
     int looping_rate = 10;
     ros::init(argc, argv, "robot_teleoperator_default"/*, ros::init_options::AnonymousName*/);
 
@@ -71,27 +72,40 @@ int main(int argc, char **argv)
 
     ros::Rate loop_rate(looping_rate);
 
+    geometry_msgs::Twist stop_twist;
+    stop_twist.linear.x = 0.0;
+    stop_twist.linear.y = 0.0;
+    stop_twist.linear.z = 0.0;
+    stop_twist.angular.x = 0.0;
+    stop_twist.angular.y = 0.0;
+    stop_twist.angular.z = 0.0;
+
     int twist_msg_not_received_count = 0;
     int lidar_msg_not_received_count = 0;
     while(ros::ok())
     {
+        std::string lidar = _teleoperator_lidar_msg_received ? "true" : "false";
+        std::string twist = _teleoperator_twist_msg_received ? "true" : "false";
         if(_teleoperator_lidar_msg_received)
         {
-            //error check lidar scan vs velocity
-            _teleoperator_twist_msg.linear.x = 0.0;
-            _teleoperator_twist_msg.linear.y = 0.0;
-            _teleoperator_twist_msg.linear.z = 0.0;
-
-            _teleoperator_twist_msg.angular.x = 0.0;
-            _teleoperator_twist_msg.angular.y = 0.0;
-            _teleoperator_twist_msg.angular.z = 1.0;
-
-            ROS_INFO("Publishing message %f %f %f %f %f %f", _teleoperator_twist_msg.linear.x, _teleoperator_twist_msg.linear.y, _teleoperator_twist_msg.linear.z, _teleoperator_twist_msg.angular.x, _teleoperator_twist_msg.angular.y, _teleoperator_twist_msg.angular.z);
-            pub.publish(_teleoperator_twist_msg);
+            _teleoperator_lidar_msg_received = false;
+            lidar_msg_not_received_count = 0;
+            critical_fail = true;
         }
-	//error checking for missing twist messages
-        if (_teleoperator_twist_msg_received)
+        else
         {
+            pub.publish(stop_twist);
+            lidar_msg_not_received_count++;
+        }
+    	//error checking for missing twist messages
+        if(_teleoperator_twist_msg_received && !critical_fail)
+        {
+            ROS_INFO("Publishing message %f %f %f %f %f %f", _teleoperator_twist_msg.linear.x,
+                     _teleoperator_twist_msg.linear.y, _teleoperator_twist_msg.linear.z,
+                     _teleoperator_twist_msg.angular.x, _teleoperator_twist_msg.angular.y,
+                     _teleoperator_twist_msg.angular.z);
+            pub.publish(_teleoperator_twist_msg);
+
             _teleoperator_twist_msg_received = false;
             twist_msg_not_received_count = 0;
         }
@@ -99,26 +113,19 @@ int main(int argc, char **argv)
         {
             twist_msg_not_received_count++;
         }
+
+
         //print error every 1 minutes
         if (twist_msg_not_received_count > 60)
         {
             ROS_DEBUG_THROTTLE(60, "Haven't heard from publisher in a minute: %i cycles", twist_msg_not_received_count);
         }
-
-	//error checking for missing lidar messages
-	if (_teleoperator_lidar_msg_received)
-        {
-            _teleoperator_lidar_msg_received = false;
-            lidar_msg_not_received_count = 0;
-        }
-        else
-        {
-            lidar_msg_not_received_count++;
-        }
         //print error every 1 minutes
         if (lidar_msg_not_received_count > 60)
         {
             ROS_DEBUG_THROTTLE(60, "Haven't heard from lidar in a minute: %i cycles", lidar_msg_not_received_count);
+            pub.publish(stop_twist);
+            critical_fail = false;
         }
 
         ros::spinOnce();
