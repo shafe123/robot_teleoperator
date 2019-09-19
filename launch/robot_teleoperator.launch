@@ -1,0 +1,7 @@
+<launch>
+  <arg name="topic_name" default="des_vel" doc="Topic name the node will subscribe to for Twist message updates."/>
+  <arg name="fail_time" default="60" doc="The amount of cycles the node will wait for a lidar message before sending a stop Twist message."/>
+  <arg name="namespace" default="robot0" doc="The namespace to launch the node in." />
+  <node pkg="robot_teleoperator_pkg" type="robot_teleoperator_pkg_node" name="$(anon robot_teleoperator)" args="$(arg topic_name) $(arg fail_time) $(arg namespace)" output="screen">
+  </node>
+</launch>
