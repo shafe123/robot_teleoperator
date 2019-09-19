@@ -41,10 +41,13 @@ void lidarCallback(const sensor_msgs::LaserScan& msg)
 
     for (iterator = 0; iterator <= value_range; iterator++)
     {
-        // check if lidar measurement will run us into wall
-	    //if y component is less than 1.0 and x component is less than +2.0
-	    if ( abs(msg.ranges[iterator]*sin(msg.angle_min+msg.angle_increment*iterator)) < 1.0 
-            && msg.ranges[iterator]*cos(msg.angle_min+msg.angle_increment*iterator) < 2)
+        float y_component = msg.ranges[iterator]*sin(msg.angle_min+msg.angle_increment*iterator);
+        float x_component = msg.ranges[iterator]*cos(msg.angle_min+msg.angle_increment*iterator);
+        // check if any lidar measurement will run us into wall
+	    if (msg.ranges[iterator] < msg.range_max 
+            && abs(y_component) < 0.20 
+            && x_component > 0.0
+            && x_component < 0.5)
         {
             ROS_INFO_THROTTLE(1, "Wall too close, stopping linear motion.");
             g_stop_linear_motion = true;
@@ -55,12 +58,27 @@ void lidarCallback(const sensor_msgs::LaserScan& msg)
 
 int main(int argc, char **argv)
 {
+    std::string TOPIC_NAME;
+    int FAIL_TIME;
+    std::string NAMESPACE;
+    int ERROR_NOTIFICATION_TIME = 5;
+
+    if (argc != 3)
+    {
+        ROS_INFO("Did not detect arguments, using defaults");
+        TOPIC_NAME = "des_vel";
+        FAIL_TIME = 60;
+        NAMESPACE = "robot0";
+    }
+    else if (argc == 3)
+    {
+        TOPIC_NAME = argv[1];
+        FAIL_TIME = std::stoi(argv[2]);
+        NAMESPACE = argv[3];
+    }
+
     bool critical_fail = false;
     const int LOOPING_RATE = 10;
-    const std::string TOPIC_NAME = argv[1];
-    const int FAIL_TIME = std::stoi(argv[2]);
-    const std::string NAMESPACE = argv[3];
-    const int ERROR_NOTIFICATION_TIME = 5;
 
     geometry_msgs::Vector3 ZERO_VECTOR;
     ZERO_VECTOR.x = 0.0;
