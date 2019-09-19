@@ -6,7 +6,7 @@
 
 bool g_teleoperator_twist_msg_received;
 bool g_teleoperator_lidar_msg_received;
-bool g_stop_forward_motion;
+bool g_stop_linear_motion;
 geometry_msgs::Twist g_teleoperator_twist_msg;
 
 void subscriberCallback(const geometry_msgs::Twist& msg) 
@@ -41,26 +41,15 @@ void lidarCallback(const sensor_msgs::LaserScan& msg)
 
     for (iterator = 0; iterator <= value_range; iterator++)
     {
-        if (msg.ranges[iterator] >= msg.range_min && msg.ranges[iterator] < min)
+        // check if lidar measurement will run us into wall
+	    //if y component is less than 1.0 and x component is less than +2.0
+	    if ( abs(msg.ranges[iterator]*sin(msg.angle_min+msg.angle_increment*iterator)) < 1.0 
+            && msg.ranges[iterator]*cos(msg.angle_min+msg.angle_increment*iterator) < 2)
         {
-            min = msg.ranges[iterator];
-            min_index = iterator;
+            ROS_INFO_THROTTLE(1, "Wall too close, stopping linear motion.");
+            g_stop_linear_motion = true;
         }
-        if (msg.ranges[iterator] <= msg.range_max && msg.ranges[iterator] > max)
-        {
-            max = msg.ranges[iterator];
-            max_index = iterator;
-        }
-        /* check if lidar measurement will run us into wall
-        if ( ... )
-        {
-            g_stop_forward_motion = true;
-        }
-        */
     }
-
-    double min_degree = msg.angle_min + min_index*msg.angle_increment;
-    ROS_DEBUG("Got message from lidar: min: %f at %f degrees, max: %f", min, min_degree, max);
     g_teleoperator_lidar_msg_received = true;
 }
 
@@ -113,7 +102,7 @@ int main(int argc, char **argv)
         }
         if(g_teleoperator_twist_msg_received && !critical_fail)
         {
-            if(!g_stop_forward_motion)
+            if(!g_stop_linear_motion)
             {
                 ROS_INFO("Publishing velocity message %f %f %f %f %f %f",
                          g_teleoperator_twist_msg.linear.x, g_teleoperator_twist_msg.linear.y,
@@ -124,7 +113,7 @@ int main(int argc, char **argv)
             else
             {
                 no_forward_twist.angular = g_teleoperator_twist_msg.angular;
-                ROS_INFO("Close to wall, stopping forward motion, publishing velocity message %f %f %f %f %f %f",
+                ROS_INFO("Publishing velocity message %f %f %f %f %f %f",
                          no_forward_twist.linear.x, no_forward_twist.linear.y,
                          no_forward_twist.linear.z, no_forward_twist.angular.x,
                          no_forward_twist.angular.y, no_forward_twist.angular.z);
